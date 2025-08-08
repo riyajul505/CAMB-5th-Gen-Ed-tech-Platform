@@ -848,4 +848,172 @@ Respond in a warm, supportive tone as if you're a helpful teacher.`;
   }
 };
 
+// 🔬 Simulation API - Interactive Virtual Science Lab
+export const simulationAPI = {
+  // Generate new simulation based on student prompt
+  generateSimulation: async (simulationData) => {
+    console.log('🔬 API: Generating new simulation:', simulationData);
+    
+    if (!simulationData.studentId || !simulationData.prompt) {
+      throw new Error('Student ID and prompt are required');
+    }
+
+    if (simulationData.prompt.length > 500) {
+      throw new Error('Prompt must be 500 characters or less');
+    }
+
+    const sanitizedData = sanitizeInput(simulationData);
+    const response = await api.post('/simulation/generate', sanitizedData);
+    
+    console.log('✅ API: Simulation generated successfully:', response.data);
+    return response;
+  },
+
+  // Get all simulations for a student
+  getStudentSimulations: async (studentId, options = {}) => {
+    console.log('📋 API: Fetching simulations for student:', studentId, options);
+    
+    if (!studentId) {
+      throw new Error('Student ID is required');
+    }
+
+    const params = new URLSearchParams();
+    if (options.page) params.append('page', options.page);
+    if (options.limit) params.append('limit', options.limit);
+    if (options.status) params.append('status', options.status);
+    if (options.subject) params.append('subject', options.subject);
+
+    const queryString = params.toString();
+    const url = `/simulation/student/${studentId}${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await api.get(url);
+    console.log('✅ API: Student simulations fetched:', response.data);
+    return response;
+  },
+
+  // Get detailed simulation by ID
+  getSimulation: async (simulationId) => {
+    console.log('🔍 API: Fetching simulation details:', simulationId);
+    
+    if (!simulationId) {
+      throw new Error('Simulation ID is required');
+    }
+
+    const response = await api.get(`/simulation/${simulationId}`);
+    console.log('✅ API: Simulation details fetched:', response.data);
+    return response;
+  },
+
+  // Update simulation state (real-time saving)
+  updateSimulationState: async (simulationId, stateData) => {
+    console.log('💾 API: Updating simulation state:', simulationId, stateData);
+    
+    if (!simulationId || !stateData) {
+      throw new Error('Simulation ID and state data are required');
+    }
+
+    // Validate state data
+    if (stateData.state) {
+      const validStatuses = ['not_started', 'in_progress', 'paused', 'completed'];
+      if (stateData.state.status && !validStatuses.includes(stateData.state.status)) {
+        throw new Error('Invalid simulation status');
+      }
+
+      if (stateData.state.progress !== undefined) {
+        const progress = Number(stateData.state.progress);
+        if (isNaN(progress) || progress < 0 || progress > 100) {
+          throw new Error('Progress must be a number between 0 and 100');
+        }
+      }
+    }
+
+    const sanitizedData = sanitizeInput(stateData);
+    const response = await api.put(`/simulation/${simulationId}/state`, sanitizedData);
+    
+    console.log('✅ API: Simulation state updated:', response.data);
+    return response;
+  },
+
+  // Start simulation
+  startSimulation: async (simulationId) => {
+    console.log('▶️ API: Starting simulation:', simulationId);
+    
+    if (!simulationId) {
+      throw new Error('Simulation ID is required');
+    }
+
+    const response = await api.post(`/simulation/${simulationId}/start`);
+    console.log('✅ API: Simulation started:', response.data);
+    return response;
+  },
+
+  // Pause simulation
+  pauseSimulation: async (simulationId) => {
+    console.log('⏸️ API: Pausing simulation:', simulationId);
+    
+    if (!simulationId) {
+      throw new Error('Simulation ID is required');
+    }
+
+    const response = await api.post(`/simulation/${simulationId}/pause`);
+    console.log('✅ API: Simulation paused:', response.data);
+    return response;
+  },
+
+  // Resume simulation
+  resumeSimulation: async (simulationId) => {
+    console.log('▶️ API: Resuming simulation:', simulationId);
+    
+    if (!simulationId) {
+      throw new Error('Simulation ID is required');
+    }
+
+    const response = await api.post(`/simulation/${simulationId}/resume`);
+    console.log('✅ API: Simulation resumed:', response.data);
+    return response;
+  },
+
+  // Complete simulation
+  completeSimulation: async (simulationId, finalResults) => {
+    console.log('🏁 API: Completing simulation:', simulationId, finalResults);
+    
+    if (!simulationId) {
+      throw new Error('Simulation ID is required');
+    }
+
+    const requestData = finalResults ? { finalResults } : {};
+    const sanitizedData = sanitizeInput(requestData);
+    
+    const response = await api.post(`/simulation/${simulationId}/complete`, sanitizedData);
+    console.log('✅ API: Simulation completed:', response.data);
+    return response;
+  },
+
+  // Get children's simulation progress for parents
+  getChildrenSimulationProgress: async (parentId) => {
+    console.log('👨‍👩‍👧‍👦 API: Fetching children simulation progress for parent:', parentId);
+    
+    if (!parentId) {
+      throw new Error('Parent ID is required');
+    }
+
+    const response = await api.get(`/simulation/parent/${parentId}/children`);
+    console.log('✅ API: Children simulation progress fetched:', response.data);
+    return response;
+  },
+
+  // Delete simulation (optional - for cleanup)
+  deleteSimulation: async (simulationId) => {
+    console.log('🗑️ API: Deleting simulation:', simulationId);
+    
+    if (!simulationId) {
+      throw new Error('Simulation ID is required');
+    }
+
+    const response = await api.delete(`/simulation/${simulationId}`);
+    console.log('✅ API: Simulation deleted:', response.data);
+    return response;
+  }
+};
+
 export default api; 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../layout/DashboardLayout';
-import { userAPI } from '../../services/api';
+import { userAPI, simulationAPI } from '../../services/api';
 import { Link } from 'react-router-dom';
 
 /**
@@ -13,11 +13,13 @@ function ParentDashboard() {
   const [selectedChildId, setSelectedChildId] = useState(null);
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [simulationStats, setSimulationStats] = useState({});
 
   // Load children data
   useEffect(() => {
     if (user?.id) {
       loadChildren();
+      loadSimulationStats();
     }
   }, [user?.id]);
 
@@ -59,6 +61,38 @@ function ParentDashboard() {
       setChildren([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSimulationStats = async () => {
+    try {
+      console.log('🔬 ParentDashboard: Loading simulation stats for parent:', user.id);
+      
+      const response = await simulationAPI.getChildrenSimulationProgress(user.id);
+      
+      if (response.data?.success) {
+        const childrenData = response.data.data.children || [];
+        console.log('✅ ParentDashboard: Simulation stats loaded:', childrenData);
+        
+        // Convert to object with childId as key for easy lookup
+        const statsMap = {};
+        childrenData.forEach(child => {
+          if (child.childId && child.simulationStats) {
+            statsMap[child.childId] = child.simulationStats;
+          }
+        });
+        
+        setSimulationStats(statsMap);
+      }
+    } catch (error) {
+      console.error('❌ ParentDashboard: Error loading simulation stats:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      // Don't fail the whole dashboard if simulation stats fail
+      setSimulationStats({});
     }
   };
 
@@ -200,7 +234,7 @@ function ParentDashboard() {
                         <span>✅</span>
                       </div>
                       <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-600">Completed</p>
+                        <p className="text-sm font-medium text-gray-600">Quizzes Completed</p>
                         <p className="text-2xl font-semibold text-gray-900">
                           {selectedChild.stats?.completed || 0}
                         </p>
@@ -214,7 +248,7 @@ function ParentDashboard() {
                         <span>📊</span>
                       </div>
                       <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-600">Average Score</p>
+                        <p className="text-sm font-medium text-gray-600">Quiz Average</p>
                         <p className="text-2xl font-semibold text-gray-900">
                           {selectedChild.stats?.average || 0}%
                         </p>
@@ -222,6 +256,114 @@ function ParentDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* Simulation Stats */}
+                {simulationStats[selectedChild?.id] && (
+                  <div className="card card-padding">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <span className="mr-2">🔬</span>
+                      Virtual Lab Experiments
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div className="stat-card">
+                        <div className="flex items-center">
+                          <div className="stat-icon bg-purple-100 text-purple-600">
+                            <span>🧪</span>
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Total Experiments</p>
+                            <p className="text-2xl font-semibold text-gray-900">
+                              {simulationStats[selectedChild.id].totalSimulations || 0}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="stat-card">
+                        <div className="flex items-center">
+                          <div className="stat-icon bg-green-100 text-green-600">
+                            <span>✅</span>
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Completed</p>
+                            <p className="text-2xl font-semibold text-gray-900">
+                              {simulationStats[selectedChild.id].completedSimulations || 0}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="stat-card">
+                        <div className="flex items-center">
+                          <div className="stat-icon bg-blue-100 text-blue-600">
+                            <span>⚡</span>
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">In Progress</p>
+                            <p className="text-2xl font-semibold text-gray-900">
+                              {simulationStats[selectedChild.id].inProgressSimulations || 0}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="stat-card">
+                        <div className="flex items-center">
+                          <div className="stat-icon bg-orange-100 text-orange-600">
+                            <span>🎯</span>
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Avg Accuracy</p>
+                            <p className="text-2xl font-semibold text-gray-900">
+                              {simulationStats[selectedChild.id].averageAccuracy || 0}%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent Simulations */}
+                    {simulationStats[selectedChild.id].recentSimulations && 
+                     simulationStats[selectedChild.id].recentSimulations.length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">Recent Experiments</h4>
+                        <div className="space-y-2">
+                          {simulationStats[selectedChild.id].recentSimulations.slice(0, 3).map((sim, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center space-x-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                                  sim.status === 'completed' 
+                                    ? 'bg-green-100 text-green-600' 
+                                    : sim.status === 'in_progress'
+                                    ? 'bg-blue-100 text-blue-600'
+                                    : 'bg-yellow-100 text-yellow-600'
+                                }`}>
+                                  {sim.status === 'completed' ? '✅' : sim.status === 'in_progress' ? '⚡' : '⏸️'}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">{sim.title}</p>
+                                  <p className="text-sm text-gray-500">
+                                    {sim.status === 'completed' && sim.accuracy 
+                                      ? `${sim.accuracy}% accuracy` 
+                                      : `Status: ${sim.status.replace('_', ' ')}`
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {sim.completedAt 
+                                  ? new Date(sim.completedAt).toLocaleDateString()
+                                  : 'In progress'
+                                }
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Learning Pathway */}
                 <div className="card card-padding">

@@ -16,6 +16,7 @@ import StudentProgressPage from '../pages/teacher/StudentProgressPage';
 // Student pages
 import StudentResourcesPage from '../pages/student/StudentResourcesPage';
 import TakeQuizPage from '../pages/student/TakeQuizPage';
+import SimulationPage from '../pages/student/SimulationPage';
 // Parent pages
 import PerformanceReportsPage from '../pages/parent/PerformanceReportsPage';
 import DashboardLayout from '../layout/DashboardLayout';
@@ -138,7 +139,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles="student">
             <DashboardLayout userRole="student">
-              <div className="p-6">Interactive Simulation Page - Coming Soon</div>
+              <SimulationPage />
             </DashboardLayout>
           </ProtectedRoute>
         } 
