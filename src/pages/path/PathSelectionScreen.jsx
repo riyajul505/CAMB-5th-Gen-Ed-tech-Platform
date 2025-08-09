@@ -60,23 +60,21 @@ function PathSelectionScreen() {
     setGeneratingImages(prev => ({ ...prev, [level.id]: true }));
     
     try {
-      const result = await imageGenerationAPI.generateImage(level.prompt);
+      console.log('🖼️ PathSelection: Generating image for level', level.id, 'with prompt:', level.prompt);
       
-      if (result.success) {
-        setLevelImages(prev => ({ 
-          ...prev, 
-          [level.id]: result.imageUrl 
-        }));
-      } else {
-        console.error('Failed to generate image for level', level.id, result.error);
-        // Use fallback emoji as image
-        setLevelImages(prev => ({ 
-          ...prev, 
-          [level.id]: 'fallback'
-        }));
-      }
+      // The imageGenerationAPI.generateImage returns the image URL directly, not a result object
+      const imageUrl = await imageGenerationAPI.generateImage(level.prompt);
+      
+      console.log('✅ PathSelection: Image generated successfully for level', level.id);
+      
+      setLevelImages(prev => ({ 
+        ...prev, 
+        [level.id]: imageUrl 
+      }));
+      
     } catch (error) {
-      console.error('Error generating image:', error);
+      console.error('❌ PathSelection: Failed to generate image for level', level.id, ':', error.message);
+      // Use fallback emoji as image
       setLevelImages(prev => ({ 
         ...prev, 
         [level.id]: 'fallback'
@@ -88,8 +86,14 @@ function PathSelectionScreen() {
 
   // Generate images for all levels on component mount
   useEffect(() => {
+    console.log('🚀 PathSelection: Starting image generation for all levels');
+    
     levels.forEach(level => {
-      setTimeout(() => generateLevelImage(level), level.id * 500); // Stagger requests
+      // Stagger requests to avoid overwhelming the API
+      setTimeout(() => {
+        console.log('⏰ PathSelection: Triggering generation for level', level.id);
+        generateLevelImage(level);
+      }, level.id * 1000); // Increased delay to 1 second per level
     });
   }, []);
 
