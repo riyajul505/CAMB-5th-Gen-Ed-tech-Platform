@@ -224,6 +224,7 @@ function QuizInterface({ resource, onQuizComplete, studentId }) {
                   {currentQuestion.explanation}
                 </p>
                 
+                {/*Talhastart*/}
                 {/* AI Explanation Button/Content */}
                 {selectedAnswer !== currentQuestion.correctAnswer && (
                   <div>
@@ -258,7 +259,8 @@ function QuizInterface({ resource, onQuizComplete, studentId }) {
           </div>
         )}
       </div>
-
+ {/*Talhaend*/}
+      
       {/* Navigation */}
       <div className="flex items-center justify-between">
         <button
