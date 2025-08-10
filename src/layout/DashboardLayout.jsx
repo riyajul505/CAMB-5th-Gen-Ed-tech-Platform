@@ -54,9 +54,13 @@ function DashboardLayout({ children, userRole }) {
   const loadUnreadCount = async () => {
     try {
       const response = await notificationAPI.getUnreadCount(user.id);
-      setUnreadCount(response.data.unreadCount);
+      console.log('🔔 Unread count response:', response);
+      // Handle different response structures
+      const unreadCount = response?.data?.unreadCount ?? response?.unreadCount ?? 0;
+      setUnreadCount(unreadCount);
     } catch (error) {
       console.error('Error loading unread count:', error);
+      setUnreadCount(0); // Set to 0 on error
     }
   };
 

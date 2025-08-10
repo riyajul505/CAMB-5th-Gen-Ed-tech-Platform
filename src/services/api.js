@@ -5,7 +5,7 @@ const api = axios.create({
   baseURL: '/api', // Use proxy path instead of full URL
   timeout: 10000,
   headers: {
-    'Content-Type': 'application/json',
+    // Don't set default Content-Type - let each request decide
     // Add security headers
     'X-Requested-With': 'XMLHttpRequest', // CSRF protection
   },
@@ -52,14 +52,26 @@ api.interceptors.request.use(
       }
     }
 
-    // Sanitize request data for security
-    if (config.data) {
+    // Set Content-Type based on data type
+    if (config.data instanceof FormData) {
+      // FormData: Let browser/axios set Content-Type with boundary
+      // Remove any existing Content-Type header
+      delete config.headers['Content-Type'];
+      console.log('📤 FormData detected - removing Content-Type to allow multipart boundary');
+    } else if (config.data && typeof config.data === 'object') {
+      // JSON data: Set Content-Type to application/json
+      config.headers['Content-Type'] = 'application/json';
+      // Sanitize request data for security
       config.data = sanitizeInput(config.data);
     }
 
     // Log API calls in development for debugging
     if (process.env.NODE_ENV === 'development') {
       console.log(`API ${config.method?.toUpperCase()} ${config.url}`, config.data);
+      console.log('🔧 Request headers:', config.headers);
+      if (config.data instanceof FormData) {
+        console.log('📁 FormData request detected with boundary support');
+      }
     }
 
     return config;
@@ -211,21 +223,59 @@ export const userAPI = {
   }
 };
 
-// Notification API with validation
+// Notification API with validation - Updated to match backend format
 export const notificationAPI = {
-  getNotifications: (userId) => {
+  getNotifications: async (userId) => {
+    console.log('🔔 Fetching notifications for user:', userId);
+    
     if (!userId) throw new Error('User ID is required');
-    return api.get(`/notifications/${userId}`);
+    
+    try {
+      const response = await api.get(`/notifications/${userId}`);
+      
+      // Backend returns direct array, wrap in consistent format for compatibility
+      const notifications = Array.isArray(response.data) ? response.data : [];
+      
+      console.log('✅ Notifications fetched:', notifications.length, 'items');
+      return {
+        data: {
+          notifications: notifications
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error fetching notifications:', error);
+      throw error;
+    }
   },
   
-  markAsRead: (notificationId) => {
+  markAsRead: async (notificationId) => {
+    console.log('✅ Marking notification as read:', notificationId);
+    
     if (!notificationId) throw new Error('Notification ID is required');
-    return api.put(`/notifications/${notificationId}/read`);
+    
+    try {
+      const response = await api.put(`/notifications/${notificationId}/read`);
+      console.log('✅ Notification marked as read');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error marking notification as read:', error);
+      throw error;
+    }
   },
   
-  getUnreadCount: (userId) => {
+  getUnreadCount: async (userId) => {
+    console.log('📊 Fetching unread count for user:', userId);
+    
     if (!userId) throw new Error('User ID is required');
-    return api.get(`/notifications/${userId}/unread-count`);
+    
+    try {
+      const response = await api.get(`/notifications/${userId}/unread-count`);
+      console.log('✅ Unread count fetched:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error fetching unread count:', error);
+      throw error;
+    }
   }
 };
 
@@ -844,6 +894,233 @@ Respond in a warm, supportive tone as if you're a helpful teacher.`;
     } catch (error) {
       console.error('❌ API Integration test failed:', error);
       return { success: false, error: error.message };
+    }
+  }
+};
+
+// Assignment API for Teachers and Students - Updated to match backend implementation
+export const assignmentAPI = {
+  // Teacher Assignment APIs
+  createAssignment: async (assignmentData) => {
+    console.log('📝 Creating assignment:', assignmentData);
+    
+    // Ensure required fields are present
+    if (!assignmentData.title || !assignmentData.description || !assignmentData.subject || 
+        !assignmentData.level || !assignmentData.dueDate || !assignmentData.teacherId) {
+      throw new Error('Missing required fields for assignment creation');
+    }
+
+    const sanitizedData = sanitizeInput(assignmentData);
+    const response = await api.post('/assignments/create', sanitizedData);
+    
+    console.log('✅ Assignment created successfully:', response.data);
+    return response.data;
+  },
+
+  getTeacherAssignments: async (teacherId, params = {}) => {
+    console.log('📋 Fetching teacher assignments:', teacherId, params);
+    
+    if (!teacherId) {
+      throw new Error('Teacher ID is required');
+    }
+
+    const queryString = new URLSearchParams(params).toString();
+    const url = `/assignments/teacher/${teacherId}${queryString ? `?${queryString}` : ''}`;
+    const response = await api.get(url);
+    
+    console.log('✅ Teacher assignments fetched:', response.data);
+    return response.data;
+  },
+
+  getAssignmentSubmissions: async (assignmentId) => {
+    console.log('📥 Fetching assignment submissions:', assignmentId);
+    
+    if (!assignmentId) {
+      throw new Error('Assignment ID is required');
+    }
+
+    const response = await api.get(`/assignments/${assignmentId}/submissions`);
+    console.log('✅ Assignment submissions fetched:', response.data);
+    return response.data;
+  },
+
+  gradeSubmission: async (gradeData) => {
+    console.log('🎯 Grading submission:', gradeData);
+    
+    // Validate required grading fields
+    if (!gradeData.submissionId || !gradeData.assignmentId || !gradeData.studentId || 
+        !gradeData.teacherId || gradeData.totalScore === undefined) {
+      throw new Error('Missing required fields for grading');
+    }
+
+    // Validate rubric scores
+    if (gradeData.rubricScores && gradeData.rubricScores.length > 0) {
+      const invalidScores = gradeData.rubricScores.some(score => 
+        score.score > score.maxPoints || score.score < 0
+      );
+      if (invalidScores) {
+        throw new Error('Rubric scores cannot exceed maximum points or be negative');
+      }
+    }
+
+    const sanitizedData = sanitizeInput(gradeData);
+    const response = await api.post('/assignments/grade', sanitizedData);
+    
+    console.log('✅ Grade submitted successfully:', response.data);
+    return response.data;
+  },
+
+  // Student Assignment APIs
+  getStudentAssignments: async (studentId, params = {}) => {
+    console.log('📚 Fetching student assignments:', studentId, params);
+    
+    if (!studentId) {
+      throw new Error('Student ID is required');
+    }
+
+    // Add studentId to params for backend filtering
+    const allParams = { ...params, studentId };
+    const queryString = new URLSearchParams(allParams).toString();
+    const url = `/assignments/student/${studentId}${queryString ? `?${queryString}` : ''}`;
+    
+    try {
+      const response = await api.get(url);
+      console.log('✅ Student assignments raw response:', response);
+      console.log('✅ Student assignments data:', response.data);
+      
+      // Return the response directly - let the component handle structure variations
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching student assignments:', error);
+      throw error;
+    }
+  },
+
+  getAssignmentForStudent: async (assignmentId, studentId) => {
+    console.log('📖 Fetching assignment details for student:', assignmentId, studentId);
+    
+    if (!assignmentId || !studentId) {
+      throw new Error('Assignment ID and Student ID are required');
+    }
+
+    const response = await api.get(`/assignments/${assignmentId}/student/${studentId}`);
+    console.log('✅ Assignment details fetched for student:', response.data);
+    return response.data;
+  },
+
+  submitAssignment: async (submissionData) => {
+    console.log('📤 Submitting assignment link...');
+    console.log('📋 Submission data:', submissionData);
+    
+    // Validate required fields for link submission
+    if (!submissionData.assignmentId || !submissionData.studentId || !submissionData.submissionLink) {
+      throw new Error('Missing required fields: assignmentId, studentId, or submissionLink');
+    }
+
+    // Validate URL format
+    const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+    if (!urlPattern.test(submissionData.submissionLink)) {
+      throw new Error('Please provide a valid URL for your submission');
+    }
+
+    try {
+      const sanitizedData = sanitizeInput(submissionData);
+      console.log('📡 Sending link submission to server:', sanitizedData);
+      
+      const response = await api.post('/assignments/submit', sanitizedData);
+      
+      console.log('✅ Assignment link submitted successfully:', response.data);
+      return response.data;
+      
+    } catch (error) {
+      console.error('❌ Assignment submission failed:', error);
+      
+      // Enhanced error reporting for link submissions
+      if (error.response?.status === 400) {
+        console.error('📋 Bad request:', error.response.data);
+        throw new Error(error.response.data?.message || 'Invalid submission data or link format.');
+      } else if (error.response?.status === 404) {
+        console.error('📋 Assignment not found');
+        throw new Error('Assignment not found. Please check if the assignment is still available.');
+      } else if (error.response?.status === 403) {
+        console.error('📋 Submission not allowed');
+        throw new Error('You are not allowed to submit to this assignment or the deadline has passed.');
+      }
+      
+      throw error;
+    }
+  },
+
+  getStudentSubmissionHistory: async (studentId, params = {}) => {
+    console.log('📜 Fetching student submission history:', studentId, params);
+    
+    if (!studentId) {
+      throw new Error('Student ID is required');
+    }
+
+    const queryString = new URLSearchParams(params).toString();
+    const url = `/assignments/student/${studentId}/submissions${queryString ? `?${queryString}` : ''}`;
+    const response = await api.get(url);
+    
+    console.log('✅ Student submission history fetched:', response.data);
+    return response.data;
+  },
+
+  // Assignment Management
+  updateAssignment: async (assignmentId, updateData) => {
+    console.log('✏️ Updating assignment:', assignmentId, updateData);
+    
+    if (!assignmentId) {
+      throw new Error('Assignment ID is required');
+    }
+
+    const sanitizedData = sanitizeInput(updateData);
+    const response = await api.put(`/assignments/${assignmentId}`, sanitizedData);
+    
+    console.log('✅ Assignment updated successfully:', response.data);
+    return response.data;
+  },
+
+  deleteAssignment: async (assignmentId) => {
+    console.log('🗑️ Deleting assignment:', assignmentId);
+    
+    if (!assignmentId) {
+      throw new Error('Assignment ID is required');
+    }
+
+    const response = await api.delete(`/assignments/${assignmentId}`);
+    console.log('✅ Assignment deleted successfully:', response.data);
+    return response.data;
+  },
+
+  // File download
+  downloadSubmission: async (submissionId, fileName = 'submission') => {
+    console.log('📥 Downloading submission:', submissionId);
+    
+    if (!submissionId) {
+      throw new Error('Submission ID is required');
+    }
+
+    try {
+      const response = await api.get(`/assignments/download/${submissionId}`, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      console.log('✅ Submission downloaded successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Download failed:', error);
+      throw new Error('Failed to download submission');
     }
   }
 };

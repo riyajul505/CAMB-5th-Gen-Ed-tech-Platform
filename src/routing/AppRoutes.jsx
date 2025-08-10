@@ -13,10 +13,13 @@ import PathSelectionScreen from '../pages/path/PathSelectionScreen';
 import MyClassesPage from '../pages/teacher/MyClassesPage';
 import TeacherResourcesPage from '../pages/teacher/TeacherResourcesPage';
 import StudentProgressPage from '../pages/teacher/StudentProgressPage';
+import CreateAssignmentPage from '../pages/teacher/CreateAssignmentPage';
+import GradeProjectsPage from '../pages/teacher/GradeProjectsPage';
 // Student pages
 import StudentResourcesPage from '../pages/student/StudentResourcesPage';
 import TakeQuizPage from '../pages/student/TakeQuizPage';
 import SimulationPage from '../pages/student/SimulationPage';
+import SubmitProjectPage from '../pages/student/SubmitProjectPage';
 // Parent pages
 import PerformanceReportsPage from '../pages/parent/PerformanceReportsPage';
 import DashboardLayout from '../layout/DashboardLayout';
@@ -160,9 +163,7 @@ function AppRoutes() {
         path="submit-project" 
         element={
           <ProtectedRoute allowedRoles="student">
-            <DashboardLayout userRole="student">
-              <div className="p-6">Submit Project Page - Coming Soon</div>
-            </DashboardLayout>
+            <SubmitProjectPage />
           </ProtectedRoute>
         } 
       />
@@ -242,9 +243,7 @@ function AppRoutes() {
         path="create-assignment" 
         element={
           <ProtectedRoute allowedRoles={['teacher', 'admin']}>
-            <DashboardLayout userRole="teacher">
-              <div className="p-6">Create Assignment Page - Coming Soon</div>
-            </DashboardLayout>
+            <CreateAssignmentPage />
           </ProtectedRoute>
         } 
       />
@@ -253,9 +252,7 @@ function AppRoutes() {
         path="grade-projects" 
         element={
           <ProtectedRoute allowedRoles={['teacher', 'admin']}>
-            <DashboardLayout userRole="teacher">
-              <div className="p-6">Grade Projects Page - Coming Soon</div>
-            </DashboardLayout>
+            <GradeProjectsPage />
           </ProtectedRoute>
         } 
       />
