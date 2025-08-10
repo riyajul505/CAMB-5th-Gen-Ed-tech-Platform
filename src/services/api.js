@@ -578,6 +578,7 @@ export const teacherAPI = {
   }
 };
 
+//Naimurstart
 // Quiz API with Gemini integration
 export const quizAPI = {
   generateQuiz: async (resourceData) => {
@@ -818,7 +819,7 @@ Respond in a warm, supportive tone as if you're a helpful teacher.`;
       };
     }
   },
-
+//Naimurend
   saveAchievement: async (achievementData, options = { convertToBase64: true }) => {
     // Validate input
     if (!achievementData.studentId || !achievementData.title || !achievementData.level) {
