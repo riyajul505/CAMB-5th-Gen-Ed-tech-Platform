@@ -42,10 +42,36 @@ function DashboardLayout({ children, userRole }) {
   const loadNotifications = async () => {
     try {
       setLoading(true);
+      console.log('🔔 DashboardLayout: Loading notifications for user:', user.id);
       const response = await notificationAPI.getNotifications(user.id);
-      setNotifications(response.data.notifications);
+      console.log('🔔 DashboardLayout: Notifications response:', response);
+      
+      // Handle different response structures
+      let notificationsData = [];
+      if (response?.data?.notifications) {
+        notificationsData = response.data.notifications;
+      } else if (Array.isArray(response?.data)) {
+        notificationsData = response.data;
+      } else if (Array.isArray(response)) {
+        notificationsData = response;
+      }
+      
+      // Ensure each notification has required fields
+      const processedNotifications = notificationsData.map(notif => ({
+        id: notif.id || notif._id || `temp-${Date.now()}`,
+        type: notif.type || 'info',
+        message: notif.message || 'Notification',
+        data: notif.data || {},
+        link: notif.link || null,
+        read: notif.read || false,
+        createdAt: notif.createdAt || new Date().toISOString()
+      }));
+      
+      console.log('🔔 DashboardLayout: Processed notifications:', processedNotifications);
+      setNotifications(processedNotifications);
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('❌ DashboardLayout: Error loading notifications:', error);
+      setNotifications([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -53,14 +79,69 @@ function DashboardLayout({ children, userRole }) {
 
   const loadUnreadCount = async () => {
     try {
+      console.log('📊 DashboardLayout: Loading unread count for user:', user.id);
       const response = await notificationAPI.getUnreadCount(user.id);
-      console.log('🔔 Unread count response:', response);
+      console.log('📊 DashboardLayout: Unread count response:', response);
       // Handle different response structures
       const unreadCount = response?.data?.unreadCount ?? response?.unreadCount ?? 0;
+      console.log('📊 DashboardLayout: Setting unread count to:', unreadCount);
       setUnreadCount(unreadCount);
     } catch (error) {
-      console.error('Error loading unread count:', error);
+      console.error('❌ DashboardLayout: Error loading unread count:', error);
       setUnreadCount(0); // Set to 0 on error
+    }
+  };
+
+  // Test function to refresh notifications
+  const refreshNotifications = () => {
+    console.log('🔄 DashboardLayout: Manually refreshing notifications...');
+    loadNotifications();
+    loadUnreadCount();
+  };
+
+  // Test function to create a sample notification (for debugging)
+  const createTestNotification = async () => {
+    try {
+      console.log('🧪 DashboardLayout: Creating test notification...');
+      // This would typically be called from the backend when certain events occur
+      // For now, we'll just add a local test notification
+      const testNotification = {
+        id: `test-${Date.now()}`,
+        type: 'test',
+        message: 'This is a test notification - ' + new Date().toLocaleTimeString(),
+        data: {},
+        link: null,
+        read: false,
+        createdAt: new Date().toISOString()
+      };
+      
+      setNotifications(prev => [testNotification, ...prev]);
+      setUnreadCount(prev => prev + 1);
+      console.log('🧪 DashboardLayout: Test notification created');
+    } catch (error) {
+      console.error('❌ DashboardLayout: Error creating test notification:', error);
+    }
+  };
+
+  // Test function to verify API endpoints
+  const testNotificationAPI = async () => {
+    try {
+      console.log('🧪 DashboardLayout: Testing notification API endpoints...');
+      
+      // Test 1: Get notifications
+      console.log('🧪 Test 1: Getting notifications...');
+      const notificationsResponse = await notificationAPI.getNotifications(user.id);
+      console.log('🧪 Notifications test result:', notificationsResponse);
+      
+      // Test 2: Get unread count
+      console.log('🧪 Test 2: Getting unread count...');
+      const unreadResponse = await notificationAPI.getUnreadCount(user.id);
+      console.log('🧪 Unread count test result:', unreadResponse);
+      
+      alert('API tests completed! Check console for details.');
+    } catch (error) {
+      console.error('❌ DashboardLayout: API test failed:', error);
+      alert('API test failed! Check console for details.');
     }
   };
 
@@ -311,6 +392,36 @@ function DashboardLayout({ children, userRole }) {
                         </button>
                       </div>
                     )}
+                    
+                    {/* Debug button for testing */}
+                    <div className="p-3 border-t border-gray-200">
+                      <button
+                        onClick={refreshNotifications}
+                        className="w-full text-sm text-gray-600 hover:text-gray-700 font-medium"
+                      >
+                        🔄 Refresh Notifications (Debug)
+                      </button>
+                    </div>
+                    
+                    {/* Test notification button */}
+                    <div className="p-3 border-t border-gray-200">
+                      <button
+                        onClick={createTestNotification}
+                        className="w-full text-sm text-gray-600 hover:text-gray-700 font-medium"
+                      >
+                        🧪 Create Test Notification (Debug)
+                      </button>
+                    </div>
+                    
+                    {/* API test button */}
+                    <div className="p-3 border-t border-gray-200">
+                      <button
+                        onClick={testNotificationAPI}
+                        className="w-full text-sm text-gray-600 hover:text-gray-700 font-medium"
+                      >
+                        🔍 Test API Endpoints (Debug)
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

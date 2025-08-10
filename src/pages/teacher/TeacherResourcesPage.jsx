@@ -22,14 +22,49 @@ function TeacherResourcesPage() {
     }
   }, [user?.id]);
 
+  // Add a retry mechanism for failed loads
+  const retryLoadResources = () => {
+    console.log('🔄 Retrying resource load...');
+    loadResources();
+  };
+
   const loadResources = async () => {
     try {
       setLoading(true);
+      console.log('🔍 Loading resources for teacher:', user.id);
+      
       const response = await teacherAPI.getTeacherResources(user.id);
-      setResources(response.data.resources);
+      console.log('📥 Raw API response:', response);
+      
+      // Handle different possible response structures
+      let resourcesData = [];
+      
+      if (response.data) {
+        // If response.data exists, check its structure
+        if (response.data.resources && Array.isArray(response.data.resources)) {
+          resourcesData = response.data.resources;
+        } else if (Array.isArray(response.data)) {
+          resourcesData = response.data;
+        } else if (response.data.success && response.data.resources) {
+          resourcesData = response.data.resources;
+        } else {
+          // If data exists but not in expected format, log it
+          console.log('🔍 Unexpected response.data structure:', response.data);
+          resourcesData = [];
+        }
+      } else if (response.resources && Array.isArray(response.resources)) {
+        resourcesData = response.resources;
+      } else if (Array.isArray(response)) {
+        resourcesData = response;
+      }
+      
+      console.log('✅ Processed resources data:', resourcesData);
+      console.log('✅ Number of resources found:', resourcesData.length);
+      setResources(resourcesData);
+      
     } catch (error) {
-      console.error('Error loading resources:', error);
-      // Fallback to mock data
+      console.error('❌ Error loading resources:', error);
+      console.log('🔄 Falling back to mock data');
       setResources(mockResources);
     } finally {
       setLoading(false);
@@ -38,21 +73,68 @@ function TeacherResourcesPage() {
 
   const handleUploadResource = async (resourceData) => {
     try {
+      console.log('📤 Starting resource upload...');
+      console.log('📋 Resource data:', resourceData);
+      
       const response = await teacherAPI.uploadResource({
         ...resourceData,
         teacherId: user.id
       });
       
+      console.log('✅ Upload response:', response);
+      
+      // Handle different response structures
+      let newResource = null;
+      let notificationsSent = 0;
+      
+      if (response.data) {
+        if (response.data.resource) {
+          newResource = response.data.resource;
+        } else if (response.data.success) {
+          // Check if success response has resource data
+          newResource = response.data.resource || {
+            id: Date.now().toString(),
+            ...resourceData,
+            createdAt: new Date().toISOString()
+          };
+        } else {
+          // If no resource in response, create one from the uploaded data
+          newResource = {
+            id: Date.now().toString(), // Temporary ID
+            ...resourceData,
+            createdAt: new Date().toISOString()
+          };
+        }
+        notificationsSent = response.data.notificationsSent || 0;
+      } else if (response.resource) {
+        newResource = response.resource;
+        notificationsSent = response.notificationsSent || 0;
+      } else {
+        // Fallback: create resource from uploaded data
+        newResource = {
+          id: Date.now().toString(),
+          ...resourceData,
+          createdAt: new Date().toISOString()
+        };
+      }
+      
+      console.log('✅ Processed new resource:', newResource);
+      
       // Add new resource to the list
-      setResources(prev => [response.data.resource, ...prev]);
+      setResources(prev => [newResource, ...prev]);
       setShowUploadModal(false);
       
       // Show success message with notification count
-      const message = `Resource uploaded successfully! ${response.data.notificationsSent || 0} students have been notified.`;
+      const message = `Resource uploaded successfully! ${notificationsSent} students have been notified.`;
       alert(message);
+      
+      console.log('✅ Resource upload completed successfully');
     } catch (error) {
-      console.error('Error uploading resource:', error);
-      alert('Failed to upload resource. Please try again.');
+      console.error('❌ Error uploading resource:', error);
+      
+      // Show specific error message if available
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error occurred';
+      alert(`Failed to upload resource: ${errorMessage}`);
     }
   };
 
@@ -271,14 +353,22 @@ function TeacherResourcesPage() {
                 : 'Try adjusting your filters to see more resources.'
               }
             </p>
-            {resources.length === 0 && (
+            <div className="flex justify-center space-x-3">
+              {resources.length === 0 && (
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="btn btn-primary"
+                >
+                  Upload Your First Resource
+                </button>
+              )}
               <button
-                onClick={() => setShowUploadModal(true)}
-                className="btn btn-primary"
+                onClick={retryLoadResources}
+                className="btn btn-secondary"
               >
-                Upload Your First Resource
+                🔄 Retry Loading
               </button>
-            )}
+            </div>
           </div>
         )}
 

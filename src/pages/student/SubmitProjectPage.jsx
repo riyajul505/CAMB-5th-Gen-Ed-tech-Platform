@@ -665,12 +665,6 @@ function SubmitProjectPage() {
               </div>
             ) : (
               <>
-                {/* Assignment content goes here */}
-              </>
-            )}
-
-            {selectedAssignment && (
-              <>
 
             {/* Assignment Details */}
             <div className="card mb-6">
@@ -775,7 +769,8 @@ function SubmitProjectPage() {
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <h4 className="font-medium text-gray-900">
-                            Version {submission.versionNumber} - {submission.fileName}
+                            Version {submission.versionNumber}
+                            {submission.fileName && ` - ${submission.fileName}`}
                           </h4>
                           <p className="text-sm text-gray-600">
                             Submitted: {new Date(submission.submittedAt).toLocaleDateString()} at {new Date(submission.submittedAt).toLocaleTimeString()}
@@ -789,7 +784,87 @@ function SubmitProjectPage() {
                         </span>
                       </div>
 
-                      {submission.grade && (
+                      {/* Enhanced Grade Display for Graded Submissions */}
+                      {submission.grade && submission.status === 'graded' && (
+                        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="font-semibold text-green-900 text-lg">📊 Grade Results</h5>
+                            <div className="text-right">
+                              {getGradeDisplay(submission.grade)}
+                            </div>
+                          </div>
+                          
+                          {/* Score Breakdown */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div className="text-center p-3 bg-white rounded-lg border">
+                              <div className="text-2xl font-bold text-green-600">
+                                {submission.grade.totalScore || 0}
+                              </div>
+                              <div className="text-sm text-gray-600">Total Score</div>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded-lg border">
+                              <div className="text-2xl font-bold text-blue-600">
+                                {submission.grade.maxScore || 100}
+                              </div>
+                              <div className="text-sm text-gray-600">Maximum Score</div>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded-lg border">
+                              <div className="text-2xl font-bold text-purple-600">
+                                {submission.grade.percentage || 0}%
+                              </div>
+                              <div className="text-sm text-gray-600">Percentage</div>
+                            </div>
+                          </div>
+                          
+                          {/* Detailed Rubric Scores */}
+                          {submission.grade.rubricScores && submission.grade.rubricScores.length > 0 && (
+                            <div className="mb-4">
+                              <h6 className="font-semibold text-gray-900 mb-3">📋 Detailed Rubric Scores</h6>
+                              <div className="space-y-2">
+                                {submission.grade.rubricScores.map((score, idx) => (
+                                  <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-gray-900">{score.criteria}</div>
+                                      {score.feedback && (
+                                        <div className="text-sm text-gray-600 mt-1">{score.feedback}</div>
+                                      )}
+                                    </div>
+                                    <div className="text-right ml-4">
+                                      <div className="text-lg font-bold text-gray-900">
+                                        {score.score}/{score.maxPoints}
+                                      </div>
+                                      <div className="text-sm text-gray-500">
+                                        {Math.round((score.score / score.maxPoints) * 100)}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Overall Feedback */}
+                          {submission.grade.overallFeedback && (
+                            <div className="mb-3">
+                              <h6 className="font-semibold text-gray-900 mb-2">💬 Teacher Feedback</h6>
+                              <div className="p-3 bg-white rounded-lg border">
+                                <p className="text-gray-700">{submission.grade.overallFeedback}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Grading Information */}
+                          <div className="text-xs text-gray-500 border-t pt-3">
+                            <div className="flex items-center justify-between">
+                              <span>Graded by: {submission.grade.gradedBy || 'Teacher'}</span>
+                              <span>Graded on: {submission.grade.gradedAt ? new Date(submission.grade.gradedAt).toLocaleDateString() : 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Simple Grade Display for Non-Graded Submissions */}
+                      {submission.grade && submission.status !== 'graded' && (
                         <div className="mb-3 p-3 bg-gray-50 rounded-lg">
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-medium text-gray-900">Grade:</span>
@@ -819,6 +894,7 @@ function SubmitProjectPage() {
                         </div>
                       )}
 
+                      {/* Submission Details */}
                       <div className="text-sm text-gray-600">
                         <div className="break-all">
                           <span className="font-medium">Link:</span> 

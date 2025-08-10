@@ -232,11 +232,14 @@ export const notificationAPI = {
     
     try {
       const response = await api.get(`/notifications/${userId}`);
+      console.log('🔔 Raw notifications response:', response);
       
       // Backend returns direct array, wrap in consistent format for compatibility
       const notifications = Array.isArray(response.data) ? response.data : [];
       
       console.log('✅ Notifications fetched:', notifications.length, 'items');
+      console.log('✅ Notifications data:', notifications);
+      
       return {
         data: {
           notifications: notifications
@@ -244,6 +247,7 @@ export const notificationAPI = {
       };
     } catch (error) {
       console.error('❌ Error fetching notifications:', error);
+      console.error('❌ Error response:', error.response?.data);
       throw error;
     }
   },
@@ -255,10 +259,11 @@ export const notificationAPI = {
     
     try {
       const response = await api.put(`/notifications/${notificationId}/read`);
-      console.log('✅ Notification marked as read');
+      console.log('✅ Notification marked as read response:', response);
       return response.data;
     } catch (error) {
       console.error('❌ Error marking notification as read:', error);
+      console.error('❌ Error response:', error.response?.data);
       throw error;
     }
   },
@@ -270,10 +275,12 @@ export const notificationAPI = {
     
     try {
       const response = await api.get(`/notifications/${userId}/unread-count`);
+      console.log('📊 Raw unread count response:', response);
       console.log('✅ Unread count fetched:', response.data);
       return response.data;
     } catch (error) {
       console.error('❌ Error fetching unread count:', error);
+      console.error('❌ Error response:', error.response?.data);
       throw error;
     }
   }
@@ -535,15 +542,32 @@ export const teacherAPI = {
       }
     }
     
+    console.log('📤 Uploading resource with data:', resourceData);
     const sanitizedData = sanitizeInput(resourceData);
-    return api.post('/teacher/resources', sanitizedData);
+    const response = await api.post('/teacher/resources', sanitizedData);
+    console.log('✅ Upload response:', response);
+    return response;
   },
 
   getTeacherResources: async (teacherId) => {
     if (!teacherId || typeof teacherId !== 'string') {
       throw new Error('Valid teacher ID is required');
     }
-    return api.get(`/teacher/resources/${teacherId}`);
+    console.log('🔍 Fetching teacher resources for:', teacherId);
+    try {
+      // Use path parameter to match backend router: /:teacherId/resources
+      const response = await api.get(`/teacher/${teacherId}/resources`);
+      console.log('✅ Teacher resources response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching teacher resources:', error);
+      // Return empty array structure for fallback
+      return {
+        data: {
+          resources: []
+        }
+      };
+    }
   },
 
   getResourcesByLevel: async (level) => {
@@ -1121,6 +1145,25 @@ export const assignmentAPI = {
     } catch (error) {
       console.error('❌ Download failed:', error);
       throw new Error('Failed to download submission');
+    }
+  },
+
+  // Get graded assignments for a student (for parent view)
+  getGradedAssignments: async (studentId) => {
+    console.log('📊 Fetching graded assignments for student:', studentId);
+    
+    if (!studentId) {
+      throw new Error('Student ID is required');
+    }
+
+    try {
+      // Get all assignments and filter for graded ones
+      const response = await assignmentAPI.getStudentAssignments(studentId, { status: 'graded' });
+      console.log('✅ Graded assignments fetched:', response.data);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching graded assignments:', error);
+      throw error;
     }
   }
 };

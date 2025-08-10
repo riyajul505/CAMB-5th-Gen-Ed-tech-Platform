@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { userAPI, quizAPI } from '../../services/api';
+import { userAPI, quizAPI, assignmentAPI } from '../../services/api';
 import DashboardLayout from '../../layout/DashboardLayout';
 
 /**
@@ -13,6 +13,7 @@ function PerformanceReportsPage() {
   const [selectedChild, setSelectedChild] = useState(null);
   const [quizHistory, setQuizHistory] = useState([]);
   const [achievements, setAchievements] = useState([]);
+  const [gradedAssignments, setGradedAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -42,6 +43,15 @@ function PerformanceReportsPage() {
     console.log('achievements state changed:', achievements);
     console.log('achievements length:', achievements.length);
   }, [achievements]);
+
+  // Debug useEffect to track graded assignments changes
+  useEffect(() => {
+    console.log('gradedAssignments state changed:', gradedAssignments);
+    console.log('gradedAssignments length:', gradedAssignments.length);
+    if (gradedAssignments.length > 0) {
+      console.log('Sample graded assignment data:', gradedAssignments[0]);
+    }
+  }, [gradedAssignments]);
 
   const loadChildren = async () => {
     try {
@@ -118,10 +128,14 @@ function PerformanceReportsPage() {
       
       console.log('Calling achievements API...');
       const achievementsPromise = quizAPI.getStudentAchievements(childId);
+
+      console.log('Calling graded assignments API...');
+      const gradedAssignmentsPromise = assignmentAPI.getGradedAssignments(childId);
       
-      const [historyResponse, achievementsResponse] = await Promise.all([
+      const [historyResponse, achievementsResponse, gradedAssignmentsResponse] = await Promise.all([
         historyPromise,
-        achievementsPromise
+        achievementsPromise,
+        gradedAssignmentsPromise
       ]);
       
       console.log('Quiz history API response:', historyResponse);
@@ -131,6 +145,10 @@ function PerformanceReportsPage() {
       console.log('Achievements API response:', achievementsResponse);
       console.log('Achievements data:', achievementsResponse.data);
       console.log('Achievements array:', achievementsResponse.data.achievements);
+
+      console.log('Graded Assignments API response:', gradedAssignmentsResponse);
+      console.log('Graded Assignments data:', gradedAssignmentsResponse.data);
+      console.log('Graded Assignments array:', gradedAssignmentsResponse.data.assignments);
       
       // Handle different possible response structures for history
       let historyData = [];
@@ -159,12 +177,30 @@ function PerformanceReportsPage() {
         console.warn('Could not find achievements in response structure');
         console.log('Full achievements response structure:', achievementsResponse.data);
       }
+
+      // Handle different possible response structures for graded assignments
+      let gradedAssignmentsData = [];
+      if (gradedAssignmentsResponse.data.assignments) {
+        gradedAssignmentsData = gradedAssignmentsResponse.data.assignments;
+        console.log('Using gradedAssignmentsResponse.data.assignments');
+      } else if (gradedAssignmentsResponse.data.data && gradedAssignmentsResponse.data.data.assignments) {
+        gradedAssignmentsData = gradedAssignmentsResponse.data.data.assignments;
+        console.log('Using gradedAssignmentsResponse.data.data.assignments');
+      } else if (Array.isArray(gradedAssignmentsResponse.data)) {
+        gradedAssignmentsData = gradedAssignmentsResponse.data;
+        console.log('Using gradedAssignmentsResponse.data as array');
+      } else {
+        console.warn('Could not find graded assignments in response structure');
+        console.log('Full graded assignments response structure:', gradedAssignmentsResponse.data);
+      }
       
       console.log('Final processed history data:', historyData);
       console.log('Final processed achievements data:', achievementsData);
+      console.log('Final processed graded assignments data:', gradedAssignmentsData);
       
       setQuizHistory(historyData);
       setAchievements(achievementsData);
+      setGradedAssignments(gradedAssignmentsData);
     } catch (error) {
       console.error('Error loading child details:', error);
       console.error('Error details:', {
@@ -175,6 +211,7 @@ function PerformanceReportsPage() {
       });
       setQuizHistory([]);
       setAchievements([]);
+      setGradedAssignments([]);
     } finally {
       setLoadingDetails(false);
     }
@@ -188,27 +225,63 @@ function PerformanceReportsPage() {
   };
 
   const stats = useMemo(() => {
-    console.log('📊 Parent Dashboard: Calculating stats for', quizHistory.length, 'quizzes');
+    console.log('📊 Parent Dashboard: Calculating stats for', quizHistory.length, 'quizzes and', gradedAssignments.length, 'assignments');
     
-    if (quizHistory.length === 0) {
-      return { average: 0, total: 0, improvement: 0 };
+    if (quizHistory.length === 0 && gradedAssignments.length === 0) {
+      return { 
+        quizAverage: 0, 
+        quizTotal: 0, 
+        quizImprovement: 0,
+        assignmentAverage: 0,
+        assignmentTotal: 0,
+        overallAverage: 0
+      };
     }
     
-    const totalScore = quizHistory.reduce((sum, quiz) => sum + quiz.score, 0);
-    const average = Math.round(totalScore / quizHistory.length);
-    
-    // Calculate improvement (last 3 vs first 3 quizzes)
-    let improvement = 0;
-    if (quizHistory.length >= 6) {
-      const recent = quizHistory.slice(0, 3).reduce((sum, quiz) => sum + quiz.score, 0) / 3;
-      const older = quizHistory.slice(-3).reduce((sum, quiz) => sum + quiz.score, 0) / 3;
-      improvement = Math.round(recent - older);
+    // Quiz statistics
+    let quizAverage = 0;
+    let quizImprovement = 0;
+    if (quizHistory.length > 0) {
+      const totalQuizScore = quizHistory.reduce((sum, quiz) => sum + quiz.score, 0);
+      quizAverage = Math.round(totalQuizScore / quizHistory.length);
+      
+      // Calculate improvement (last 3 vs first 3 quizzes)
+      if (quizHistory.length >= 6) {
+        const recent = quizHistory.slice(0, 3).reduce((sum, quiz) => sum + quiz.score, 0) / 3;
+        const older = quizHistory.slice(-3).reduce((sum, quiz) => sum + quiz.score, 0) / 3;
+        quizImprovement = Math.round(recent - older);
+      }
     }
     
-    const result = { average, total: quizHistory.length, improvement };
+    // Assignment statistics
+    let assignmentAverage = 0;
+    if (gradedAssignments.length > 0) {
+      const totalAssignmentScore = gradedAssignments.reduce((sum, assignment) => {
+        const latestSubmission = assignment.mySubmissions?.[assignment.mySubmissions.length - 1];
+        const grade = latestSubmission?.grade;
+        if (grade && grade.totalScore !== undefined && grade.maxScore !== undefined) {
+          return sum + (grade.totalScore / grade.maxScore * 100);
+        }
+        return sum;
+      }, 0);
+      assignmentAverage = Math.round(totalAssignmentScore / gradedAssignments.length);
+    }
+    
+    // Overall average (combining quizzes and assignments)
+    const totalItems = quizHistory.length + gradedAssignments.length;
+    const overallAverage = totalItems > 0 ? Math.round((quizAverage * quizHistory.length + assignmentAverage * gradedAssignments.length) / totalItems) : 0;
+    
+    const result = { 
+      quizAverage, 
+      quizTotal: quizHistory.length, 
+      quizImprovement,
+      assignmentAverage,
+      assignmentTotal: gradedAssignments.length,
+      overallAverage
+    };
     console.log('📊 Parent Dashboard: Stats calculated ->', result);
     return result;
-  }, [quizHistory]);
+  }, [quizHistory, gradedAssignments]);
 
   if (loading) {
     return (
@@ -278,12 +351,12 @@ function PerformanceReportsPage() {
         {selectedChild && (
           <>
             {/* Performance Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
               <div className="stat-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Average Score</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.average}%</p>
+                    <p className="text-sm text-gray-600">Overall Average</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.overallAverage}%</p>
                   </div>
                   <div className="stat-icon bg-blue-100 text-blue-600">
                     📊
@@ -295,7 +368,7 @@ function PerformanceReportsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600">Quizzes Taken</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.quizTotal}</p>
                   </div>
                   <div className="stat-icon bg-green-100 text-green-600">
                     ✅
@@ -306,12 +379,24 @@ function PerformanceReportsPage() {
               <div className="stat-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Improvement</p>
-                    <p className={`text-2xl font-bold ${stats.improvement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {stats.improvement >= 0 ? '+' : ''}{stats.improvement}%
-                    </p>
+                    <p className="text-sm text-gray-600">Assignments Graded</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.assignmentTotal}</p>
                   </div>
                   <div className="stat-icon bg-purple-100 text-purple-600">
+                    📝
+                  </div>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Quiz Improvement</p>
+                    <p className={`text-2xl font-bold ${stats.quizImprovement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {stats.quizImprovement >= 0 ? '+' : ''}{stats.quizImprovement}%
+                    </p>
+                  </div>
+                  <div className="stat-icon bg-orange-100 text-orange-600">
                     📈
                   </div>
                 </div>
@@ -448,6 +533,136 @@ function PerformanceReportsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Graded Assignments */}
+            {gradedAssignments.length > 0 && (
+              <div className="mt-6 card card-padding">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">📝 Graded Assignments</h3>
+                <div className="space-y-4">
+                  {gradedAssignments.map((assignment, index) => {
+                    const latestSubmission = assignment.mySubmissions?.[assignment.mySubmissions.length - 1];
+                    const grade = latestSubmission?.grade;
+                    
+                    return (
+                      <div key={assignment.id || index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900 text-lg">{assignment.title}</h4>
+                            <p className="text-sm text-gray-600 mb-1">{assignment.subject} • Level {assignment.level}</p>
+                            <p className="text-sm text-gray-500">
+                              Due: {new Date(assignment.dueDate).toLocaleDateString()} • 
+                              Submitted: {latestSubmission ? new Date(latestSubmission.submittedAt).toLocaleDateString() : 'N/A'}
+                            </p>
+                          </div>
+                          {grade && (
+                            <div className="text-right ml-4">
+                              <div className="text-2xl font-bold text-green-600">
+                                {grade.totalScore}/{grade.maxScore}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {grade.percentage || Math.round((grade.totalScore / grade.maxScore) * 100)}%
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {grade && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-green-600">{grade.totalScore}</div>
+                                <div className="text-xs text-gray-600">Total Score</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-blue-600">{grade.maxScore}</div>
+                                <div className="text-xs text-gray-600">Maximum Score</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-purple-600">
+                                  {grade.percentage || Math.round((grade.totalScore / grade.maxScore) * 100)}%
+                                </div>
+                                <div className="text-xs text-gray-600">Percentage</div>
+                              </div>
+                            </div>
+
+                            {/* Rubric Scores */}
+                            {grade.rubricScores && grade.rubricScores.length > 0 && (
+                              <div className="mb-3">
+                                <h6 className="font-semibold text-gray-900 mb-2">📋 Detailed Scores</h6>
+                                <div className="space-y-2">
+                                  {grade.rubricScores.map((score, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border">
+                                      <div className="flex-1">
+                                        <div className="font-medium text-gray-900 text-sm">{score.criteria}</div>
+                                        {score.feedback && (
+                                          <div className="text-xs text-gray-600 mt-1">{score.feedback}</div>
+                                        )}
+                                      </div>
+                                      <div className="text-right ml-4">
+                                        <div className="font-bold text-gray-900">
+                                          {score.score}/{score.maxPoints}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                          {Math.round((score.score / score.maxPoints) * 100)}%
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Overall Feedback */}
+                            {grade.overallFeedback && (
+                              <div className="mb-3">
+                                <h6 className="font-semibold text-gray-900 mb-2">💬 Teacher Feedback</h6>
+                                <div className="p-3 bg-white rounded border">
+                                  <p className="text-gray-700 text-sm">{grade.overallFeedback}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Grading Information */}
+                            <div className="text-xs text-gray-500 border-t pt-3">
+                              <div className="flex items-center justify-between">
+                                <span>Graded by: {grade.gradedBy || 'Teacher'}</span>
+                                <span>Graded on: {grade.gradedAt ? new Date(grade.gradedAt).toLocaleDateString() : 'N/A'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Submission Details */}
+                        {latestSubmission && (
+                          <div className="text-sm text-gray-600">
+                            <div className="break-all">
+                              <span className="font-medium">Submission Link:</span> 
+                              <a 
+                                href={latestSubmission.submissionLink} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 ml-1"
+                              >
+                                {latestSubmission.submissionLink}
+                              </a>
+                            </div>
+                            {latestSubmission.submissionNotes && (
+                              <div className="mt-2">
+                                <span className="font-medium">Student Notes:</span> {latestSubmission.submissionNotes}
+                              </div>
+                            )}
+                            <div className="mt-2">
+                              <span className="font-medium">Version:</span> {latestSubmission.versionNumber}
+                              {latestSubmission.isLate && <span className="text-red-600 ml-2">(Late)</span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
