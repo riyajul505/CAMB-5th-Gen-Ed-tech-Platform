@@ -33,6 +33,7 @@ function GradeProjectsPage() {
     try {
       setLoading(true);
       const response = await assignmentAPI.getTeacherAssignments(user.id, { status: filter });
+      console.log('📊 Backend assignments with submissionStats:', response.assignments);
       setAssignments(response.assignments || []);
     } catch (error) {
       console.error('Error loading assignments:', error);
@@ -166,7 +167,7 @@ function GradeProjectsPage() {
   };
 
   const getSubmissionStatusBadge = (submission) => {
-    if (submission.grade) {
+    if (submission.status === 'graded' && submission.grade) {
       const percentage = Math.round(submission.grade.percentage);
       let colorClass = 'bg-success-100 text-success-800';
       
@@ -174,10 +175,10 @@ function GradeProjectsPage() {
       else if (percentage < 80) colorClass = 'bg-warning-100 text-warning-800';
       
       return <span className={`badge ${colorClass}`}>Graded ({percentage}%)</span>;
-    } else if (submission.isLate) {
-      return <span className="badge bg-error-100 text-error-800">Late Submission</span>;
+    } else if (submission.status === 'submitted') {
+      return <span className="badge bg-blue-100 text-blue-800">Submitted</span>;
     } else {
-      return <span className="badge bg-blue-100 text-blue-800">Needs Grading</span>;
+      return <span className="badge bg-gray-100 text-gray-800">Pending</span>;
     }
   };
 
@@ -194,31 +195,46 @@ function GradeProjectsPage() {
 
   // Calculate submission statistics for an assignment
   const calculateSubmissionStats = (assignment) => {
-    // This would typically be calculated from backend data
-    // For mock data, we'll calculate based on the assignment structure
+    // Priority 1: Use backend submissionStats if available (for initial load)
     if (assignment.submissionStats) {
       return assignment.submissionStats;
     }
 
-    // Fallback calculation if no stats provided
-    const totalStudents = 25; // Default for mock data
-    const submitted = 1; // Default for mock data 
-    const graded = assignment.id === 'mock1' ? 1 : 0; // Only first assignment has grades
-    const pending = totalStudents - submitted;
-    const avgScore = graded > 0 ? 85.0 : 0;
+    // Priority 2: If we have submissions data for this assignment, calculate from actual data
+    if (submissions.length > 0 && selectedAssignment?.id === assignment.id) {
+      const totalSubmissions = submissions.length;
+      const submitted = submissions.filter(s => s.status === 'submitted' || s.status === 'graded').length;
+      const graded = submissions.filter(s => s.status === 'graded').length;
+      const pending = totalSubmissions - submitted;
+      
+      // Calculate average score from graded submissions
+      const gradedSubmissions = submissions.filter(s => s.status === 'graded' && s.grade);
+      const avgScore = gradedSubmissions.length > 0 
+        ? gradedSubmissions.reduce((sum, s) => sum + (s.grade.percentage || 0), 0) / gradedSubmissions.length
+        : 0;
 
+      return {
+        totalStudents: totalSubmissions,
+        submitted,
+        pending,
+        graded,
+        avgScore: Math.round(avgScore * 10) / 10 // Round to 1 decimal place
+      };
+    }
+
+    // Default fallback for assignments without any stats
     return {
-      totalStudents,
-      submitted,
-      pending,
-      graded,
-      avgScore
+      totalStudents: 0,
+      submitted: 0,
+      pending: 0,
+      graded: 0,
+      avgScore: 0
     };
   };
 
   // Filter assignments based on current filter
   const getFilteredAssignments = () => {
-    return assignments.filter(assignment => {
+    const filtered = assignments.filter(assignment => {
       const now = new Date();
       const dueDate = new Date(assignment.dueDate);
       
@@ -232,10 +248,23 @@ function GradeProjectsPage() {
         default:
           return true;
       }
-    }).map(assignment => ({
-      ...assignment,
-      submissionStats: calculateSubmissionStats(assignment)
-    }));
+    }).map(assignment => {
+      // If backend already provides submissionStats, use them directly
+      // Only calculate stats if we have loaded submissions for this specific assignment
+      const submissionStats = (submissions.length > 0 && selectedAssignment?.id === assignment.id) 
+        ? calculateSubmissionStats(assignment)
+        : assignment.submissionStats || calculateSubmissionStats(assignment);
+      
+      console.log(`📊 Assignment "${assignment.title}" submissionStats:`, submissionStats);
+      
+      return {
+        ...assignment,
+        submissionStats
+      };
+    });
+    
+    console.log('📊 Final filtered assignments:', filtered);
+    return filtered;
   };
 
   // Mock data for development
@@ -346,8 +375,7 @@ function GradeProjectsPage() {
         overallFeedback: 'Great work overall! Very comprehensive project.',
         gradedBy: 'teacher_id',
         gradedAt: '2024-01-21T10:30:00Z'
-      },
-      isLate: false
+      }
     },
     {
       id: 'sub2',
@@ -358,8 +386,7 @@ function GradeProjectsPage() {
       submissionNotes: 'First submission',
       submittedAt: '2024-01-21T15:30:00Z',
       status: 'submitted',
-      grade: null,
-      isLate: false
+      grade: null
     }
   ];
 
@@ -501,28 +528,22 @@ function GradeProjectsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-blue-50 rounded-lg">
                   <div className="text-xl font-bold text-blue-600">{submissions.length}</div>
                   <div className="text-sm text-blue-700">Total Submissions</div>
                 </div>
                 <div className="text-center p-3 bg-green-50 rounded-lg">
                   <div className="text-xl font-bold text-green-600">
-                    {submissions.filter(s => s.grade).length}
+                    {submissions.filter(s => s.status === 'graded').length}
                   </div>
                   <div className="text-sm text-green-700">Graded</div>
                 </div>
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
                   <div className="text-xl font-bold text-orange-600">
-                    {submissions.filter(s => !s.grade).length}
+                    {submissions.filter(s => s.status === 'submitted').length}
                   </div>
                   <div className="text-sm text-orange-700">Pending</div>
-                </div>
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <div className="text-xl font-bold text-red-600">
-                    {submissions.filter(s => s.isLate).length}
-                  </div>
-                  <div className="text-sm text-red-700">Late</div>
                 </div>
               </div>
             </div>
@@ -608,7 +629,7 @@ function GradeProjectsPage() {
                           onClick={() => initializeGradeForm(submission)}
                           className="px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
                         >
-                          {submission.grade ? '📝 Re-grade' : '📝 Grade'}
+                          {submission.status === 'graded' ? '📝 Re-grade' : '📝 Grade'}
                         </button>
                       </div>
                     </div>
@@ -662,8 +683,8 @@ function GradeProjectsPage() {
                 </div>
                 <div>
                   <span className="font-medium text-gray-700">Status:</span>
-                  <div className={selectedSubmission.isLate ? 'text-red-600' : 'text-green-600'}>
-                    {selectedSubmission.isLate ? 'Late' : 'On Time'}
+                  <div className="text-blue-600">
+                    {selectedSubmission.status === 'graded' ? 'Graded' : selectedSubmission.status === 'submitted' ? 'Submitted' : 'Pending'}
                   </div>
                 </div>
               </div>
