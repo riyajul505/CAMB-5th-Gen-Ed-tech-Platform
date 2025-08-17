@@ -15,11 +15,15 @@ import TeacherResourcesPage from '../pages/teacher/TeacherResourcesPage';
 import StudentProgressPage from '../pages/teacher/StudentProgressPage';
 import CreateAssignmentPage from '../pages/teacher/CreateAssignmentPage';
 import GradeProjectsPage from '../pages/teacher/GradeProjectsPage';
+import TeacherChatPage from '../pages/teacher/TeacherChatPage';
+import ScheduleLabPage from '../pages/teacher/ScheduleLabPage';
 // Student pages
 import StudentResourcesPage from '../pages/student/StudentResourcesPage';
 import TakeQuizPage from '../pages/student/TakeQuizPage';
 import SimulationPage from '../pages/student/SimulationPage';
 import SubmitProjectPage from '../pages/student/SubmitProjectPage';
+import QnAPage from '../pages/student/QnAPage';
+import JoinLabPage from '../pages/student/JoinLabPage';
 // Parent pages
 import PerformanceReportsPage from '../pages/parent/PerformanceReportsPage';
 import DashboardLayout from '../layout/DashboardLayout';
@@ -131,7 +135,9 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles="student">
             <DashboardLayout userRole="student">
-              <div className="p-6">Join Lab Page - Coming Soon</div>
+              {/* <div className="p-6">Join Lab Page - Coming Soon</div>
+               */}
+                <JoinLabPage />
             </DashboardLayout>
           </ProtectedRoute>
         } 
@@ -153,7 +159,18 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles="student">
             <DashboardLayout userRole="student">
-              <div className="p-6">Q&A Page - Coming Soon</div>
+              <QnAPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      {/* add teacher dashboard chat */}
+      <Route 
+        path="teacher-chat" 
+        element={
+          <ProtectedRoute allowedRoles="teacher">
+            <DashboardLayout userRole="teacher">
+              <TeacherChatPage />
             </DashboardLayout>
           </ProtectedRoute>
         } 
@@ -262,7 +279,9 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['teacher', 'admin']}>
             <DashboardLayout userRole="teacher">
-              <div className="p-6">Schedule Lab Page - Coming Soon</div>
+              {/* <div className="p-6">Schedule Lab Page - Coming Soon</div>
+               */}
+               <ScheduleLabPage />
             </DashboardLayout>
           </ProtectedRoute>
         } 

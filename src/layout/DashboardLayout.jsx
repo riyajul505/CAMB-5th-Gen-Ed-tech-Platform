@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { notificationAPI } from '../services/api';
+import TeacherChatPage from '../pages/teacher/TeacherChatPage';
 
 /**
  * Dashboard Layout Component
@@ -205,6 +206,8 @@ function DashboardLayout({ children, userRole }) {
           { name: 'My Classes', icon: '🏫', path: '/my-classes' },
           { name: 'Student Progress', icon: '📈', path: '/student-progress' },
           { name: 'Create Assignment', icon: '📝', path: '/create-assignment' },
+          // add teacher chat
+          { name: 'Teacher Chat', icon: '💬', path: '/teacher-chat' },
           { name: 'Grade Projects', icon: '✅', path: '/grade-projects' },
           { name: 'Schedule Lab', icon: '🗓️', path: '/schedule-lab' },
           { name: 'Resources', icon: '📚', path: '/teacher-resources' },
