@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../layout/DashboardLayout';
-import { userAPI, simulationAPI } from '../../services/api';
+import { userAPI, simulationAPI, reportsAPI } from '../../services/api';
 import { Link } from 'react-router-dom';
 
 /**
@@ -418,6 +418,20 @@ function ParentDashboard() {
               <div className="space-y-3">
                 <button className="btn-primary w-full text-sm">
                   📈 Performance Reports
+                </button>
+                <button
+                  onClick={() => {
+                    const childId = selectedChildId || selectedChild?.id || (children[0]?.id);
+                    if (!childId) {
+                      alert('No child selected');
+                      return;
+                    }
+                    reportsAPI.downloadStudentReport(childId, `${children.find(c=>c.id===childId)?.profile?.firstName || 'child'}-report.pdf`)
+                      .catch(() => alert('Failed to download report'));
+                  }}
+                  className="btn-secondary w-full text-sm"
+                >
+                  📄 Download Child Report (PDF)
                 </button>
                 <button className="btn-secondary w-full text-sm">
                   📊 View Quiz Scores

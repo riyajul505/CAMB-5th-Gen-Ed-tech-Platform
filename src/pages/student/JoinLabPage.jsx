@@ -146,15 +146,16 @@ const JoinLabPage = () => {
       const response = await labBookingAPI.cancelBooking(bookingId, user.id);
       console.log('📥 Cancel booking response:', response.data);
 
-      if (response.data && response.data.data.success) {
+      if (response.data && response.data.success) {
         // Remove booking from state
         setMyBookings(prev => prev.filter(booking => booking.id !== bookingId));
         
         // Update slot availability if we have the slot info
         const canceledBooking = myBookings.find(b => b.id === bookingId);
-        if (canceledBooking) {
+        const canceledSlotId = canceledBooking?.slotId || canceledBooking?.slot?.id;
+        if (canceledSlotId) {
           setAvailableSlots(prev => prev.map(slot => 
-            slot.id === canceledBooking.slotId 
+            slot.id === canceledSlotId
               ? { ...slot, currentBookings: Math.max(0, (slot.currentBookings || 0) - 1) }
               : slot
           ));
@@ -171,11 +172,29 @@ const JoinLabPage = () => {
     }
   };
 
+  // Helpers to determine active bookings and whether this student already booked a slot
+  const isActiveBooking = (booking) => {
+    const status = (booking?.status || '').toLowerCase();
+    return status !== 'cancelled' && status !== 'canceled';
+  };
+
+  const hasActiveBookingForSlot = (slotId) => {
+    return myBookings.some(b => isActiveBooking(b) && ((b.slotId || b.slot?.id) === slotId));
+  };
+
   const getAvailableSlotsForLevel = () => {
+    const activeBookedSlotIds = new Set(
+      myBookings
+        .filter(isActiveBooking)
+        .map(b => b.slotId || b.slot?.id)
+        .filter(Boolean)
+    );
+
     return availableSlots.filter(slot => 
       slot.level === studentLevel && 
       slot.status === 'active' && 
-      (slot.currentBookings || 0) < slot.maxStudents
+      (slot.currentBookings || 0) < slot.maxStudents &&
+      !activeBookedSlotIds.has(slot.id)
     );
   };
 
@@ -218,11 +237,11 @@ const JoinLabPage = () => {
 
       <div className="flex-1 overflow-y-auto">
         {/* My Bookings Section */}
-        {myBookings.length > 0 && (
+        {myBookings.filter(isActiveBooking).length > 0 && (
           <div className="bg-white border-b border-gray-200 px-6 py-4">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">My Booked Sessions</h2>
             <div className="space-y-3">
-              {myBookings.map((booking) => (
+              {myBookings.filter(isActiveBooking).map((booking) => (
                 <div key={booking.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">

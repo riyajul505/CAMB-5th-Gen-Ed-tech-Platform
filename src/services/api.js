@@ -68,6 +68,9 @@ api.interceptors.request.use(
     // Log API calls in development for debugging
     if (process.env.NODE_ENV === 'development') {
       console.log(`API ${config.method?.toUpperCase()} ${config.url}`, config.data);
+      if (config.params) {
+        console.log('🔎 Request params:', config.params);
+      }
       console.log('🔧 Request headers:', config.headers);
       if (config.data instanceof FormData) {
         console.log('📁 FormData request detected with boundary support');
@@ -580,7 +583,88 @@ export const teacherAPI = {
 
 // Quiz API with Gemini integration
 export const quizAPI = {
-  generateQuiz: async (resourceData) => {
+  // Get low-score (<30%) attempts for a resource by id or title
+  getWeakAttempts: async (studentId, { resourceId, resourceTitle } = {}) => {
+    if (!studentId) throw new Error('Student ID is required');
+    // Prefer resourceId; only send ONE param
+    const params = {};
+    if (resourceId) {
+      params.resourceId = resourceId;
+    } else if (resourceTitle) {
+      params.resourceTitle = resourceTitle;
+    }
+    console.log('🧪 [quizAPI.getWeakAttempts] studentId:', studentId, 'params:', params);
+    try {
+      const resp = await api.get(`/quiz/weak/${studentId}`, { params });
+      const attemptsLen = resp?.data?.data?.attempts?.length || 0;
+      console.log('✅ [quizAPI.getWeakAttempts] attempts:', attemptsLen, 'totalAttempts:', resp?.data?.data?.totalAttempts);
+      return resp;
+    } catch (err) {
+      console.error('❌ [quizAPI.getWeakAttempts] error:', err?.response?.data || err?.message);
+      throw err;
+    }
+  },
+
+  // Summarize weaknesses with Gemini using a compact mistakes list
+  generateWeaknessInsights: async (mistakes = []) => {
+    try {
+      console.log('🧪 [quizAPI.generateWeaknessInsights] mistakes received:', mistakes.length);
+      const geminiApiKey = import.meta.env.VITE_GEMINI_API;
+      if (!geminiApiKey) {
+        console.warn('⚠️ [quizAPI.generateWeaknessInsights] Gemini key missing; returning local insight.');
+        return {
+          data: {
+            insights:
+              'Focus on the concepts behind your incorrect answers. Review the explanations, practice similar problems, and pay attention to where your chosen option differs from the correct one.'
+          }
+        };
+      }
+
+      // Build a compact context (limit items and text length)
+      const MAX_ITEMS = 10;
+      const normalized = mistakes
+        .slice(0, MAX_ITEMS)
+        .map((m, idx) => {
+          const q = (m.question || '').replace(/\s+/g, ' ').slice(0, 180);
+          const sel = String(m.selectedOption || '').slice(0, 60);
+          const corr = Array.isArray(m.options)
+            ? m.options[m.correctAnswer]
+            : m.correctAnswerText || m.correctAnswer;
+          const corrStr = String(corr || '').slice(0, 60);
+          return `${idx + 1}. Q: ${q} | Student chose: "${sel}" | Correct: "${corrStr}"`;
+        })
+        .join('\n');
+
+      console.log('🧪 [quizAPI.generateWeaknessInsights] normalized length:', normalized.length);
+
+      const prompt = `You are an encouraging tutor. Analyze the student's repeated mistakes below (score <30%). Identify the top 3-5 weak concepts and give short, actionable advice with one practice tip each. Keep the response under 180 words.\n\nMistakes:\n${normalized}`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.5, topP: 0.9, maxOutputTokens: 400 }
+        })
+      });
+
+      if (!response.ok) throw new Error(`Gemini error ${response.status}`);
+      const data = await response.json();
+      const text = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+      console.log('✅ [quizAPI.generateWeaknessInsights] insights length:', text.length, 'preview:', text.slice(0, 120));
+      return { data: { insights: text } };
+    } catch (error) {
+      console.error('❌ [quizAPI.generateWeaknessInsights] failed:', error);
+      return {
+        data: {
+          insights:
+            'We identified areas that need practice, but the assistant could not summarize them right now. Review explanations for incorrect questions and revisit prerequisite topics.'
+        }
+      };
+    }
+  },
+
+  generateQuiz: async (resourceData, options = {}) => {
     if (!resourceData || !resourceData.title) {
       throw new Error('Resource data is required for quiz generation');
     }
@@ -596,9 +680,17 @@ export const quizAPI = {
       const content = `${resourceData.title}\n\n${resourceData.description || ''}\n\n${resourceData.content || ''}`;
       const sanitizedContent = sanitizeInput(content).substring(0, 8000); // Limit content length
 
+      const weaknessSection = options.weaknessInsights
+        ? `Student's common mistakes summary (target these areas, avoid identical wording):\n${sanitizeInput(options.weaknessInsights).slice(0, 800)}\n\n`
+        : '';
+
+      console.log('🧪 [quizAPI.generateQuiz] resource:', { id: resourceData.id, title: resourceData.title });
+      console.log('🧪 [quizAPI.generateQuiz] weakness provided:', Boolean(options.weaknessInsights), 'len:', (options.weaknessInsights || '').length);
+
       const prompt = `Generate a quiz with 5-8 multiple choice questions based on the following educational content. 
-      
+        
 Content: ${sanitizedContent}
+${weaknessSection}
 
 Please respond with a JSON object in exactly this format:
 {
@@ -622,7 +714,10 @@ Requirements:
 - correctAnswer should be the index (0-3) of the correct option
 - Include clear explanations for each answer
 - Make questions engaging and educational
-- Focus on key concepts from the content`;
+- Focus on key concepts from the content
+- If a weaknesses summary is provided, ensure at least half of the questions specifically address those weak areas with varied phrasing (do not copy past questions).`;
+
+      console.log('🧪 [quizAPI.generateQuiz] prompt length:', prompt.length);
 
       // Call Gemini API
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`, {
@@ -656,6 +751,7 @@ Requirements:
       }
 
       const generatedText = data.candidates[0].content.parts[0].text;
+      console.log('🧪 [quizAPI.generateQuiz] raw text length:', generatedText?.length || 0);
       
       // Parse the JSON response
       let quizData;
@@ -680,9 +776,10 @@ Requirements:
             throw new Error(`Invalid question structure at index ${index}`);
           }
         });
+        console.log('✅ [quizAPI.generateQuiz] parsed questions:', quizData.quiz.questions.length);
 
       } catch (parseError) {
-        console.error('Error parsing Gemini response:', parseError);
+        console.error('❌ [quizAPI.generateQuiz] JSON parse error:', parseError);
         throw new Error('Failed to parse quiz data from AI response');
       }
 
@@ -695,7 +792,7 @@ Requirements:
       };
 
     } catch (error) {
-      console.error('Quiz generation error:', error);
+      console.error('❌ [quizAPI.generateQuiz] generation error:', error);
       throw new Error(`Failed to generate quiz: ${error.message}`);
     }
   },
@@ -1163,6 +1260,36 @@ export const assignmentAPI = {
       return response;
     } catch (error) {
       console.error('❌ Error fetching graded assignments:', error);
+      throw error;
+    }
+  }
+};
+
+// Reports API - download student PDF report
+export const reportsAPI = {
+  downloadStudentReport: async (studentId, fileName = 'student-report.pdf') => {
+    if (!studentId || typeof studentId !== 'string') {
+      throw new Error('Valid student ID is required');
+    }
+    console.log('📥 Downloading student report PDF for:', studentId);
+    try {
+      const response = await api.get(`/reports/student/${studentId}`, {
+        responseType: 'blob'
+      });
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      console.log('✅ Student report downloaded');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to download student report:', error);
       throw error;
     }
   }

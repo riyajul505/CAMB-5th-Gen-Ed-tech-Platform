@@ -17,6 +17,7 @@ function QuizInterface({ resource, onQuizComplete, studentId }) {
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [error, setError] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
+  const [usedWeaknessInsights, setUsedWeaknessInsights] = useState(false);
 
   // Generate quiz when component mounts
   useEffect(() => {
@@ -27,11 +28,52 @@ function QuizInterface({ resource, onQuizComplete, studentId }) {
     try {
       setLoading(true);
       setError(null);
-      const response = await quizAPI.generateQuiz(resource);
+
+      let weaknessInsights = '';
+      setUsedWeaknessInsights(false);
+      console.log('🧪 [QuizInterface] Generating quiz for resource:', { id: resource.id, title: resource.title, studentId });
+
+      // 1) Try to fetch weak attempts for this resource (by id OR title)
+      try {
+        const weakResp = await quizAPI.getWeakAttempts(studentId, {
+          resourceId: resource.id,
+          resourceTitle: resource.title
+        });
+        const attempts = weakResp?.data?.data?.attempts || [];
+        console.log('🧪 [QuizInterface] weak attempts found:', attempts.length);
+        // Collect incorrect Q&A pairs (cap to avoid large context)
+        const mistakes = [];
+        attempts.forEach((att, idx) => {
+          (att.questions || []).forEach((q) => {
+            if (q && q.isCorrect === false) {
+              mistakes.push({
+                question: q.question,
+                options: q.options,
+                correctAnswer: q.correctAnswer,
+                selectedOption: q.selectedOption
+              });
+            }
+          });
+        });
+        console.log('🧪 [QuizInterface] mistakes count:', mistakes.length);
+        if (mistakes.length > 0) {
+          const insightsResp = await quizAPI.generateWeaknessInsights(mistakes);
+          weaknessInsights = insightsResp?.data?.insights || '';
+          console.log('🧪 [QuizInterface] weaknessInsights length:', weaknessInsights.length);
+          if (weaknessInsights) setUsedWeaknessInsights(true);
+        }
+      } catch (e) {
+        // Non-fatal: fall back to generic generation
+        console.warn('⚠️ [QuizInterface] Weak attempts/insights unavailable:', e?.message);
+      }
+
+      // 2) Generate quiz (optionally with weakness insights)
+      const response = await quizAPI.generateQuiz(resource, { weaknessInsights });
       setQuiz(response.data.quiz);
       setAnswers(new Array(response.data.quiz.questions.length).fill(null));
+      console.log('✅ [QuizInterface] Quiz generated. Questions:', response.data.quiz.questions.length, 'usedWeakness:', Boolean(weaknessInsights));
     } catch (error) {
-      console.error('Error generating quiz:', error);
+      console.error('❌ [QuizInterface] Error generating quiz:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -105,7 +147,8 @@ function QuizInterface({ resource, onQuizComplete, studentId }) {
       score,
       resourceId: resource.id,
       studentId,
-      completedAt: new Date().toISOString()
+      completedAt: new Date().toISOString(),
+      usedWeaknessInsights
     };
 
     onQuizComplete(results);
@@ -152,9 +195,13 @@ function QuizInterface({ resource, onQuizComplete, studentId }) {
             Question {currentQuestionIndex + 1} of {quiz.questions.length}
           </div>
         </div>
-        
+        {usedWeaknessInsights && (
+          <div className="text-xs px-3 py-2 rounded bg-yellow-50 text-yellow-800 border border-yellow-200">
+            This quiz includes questions focused on your recent weak areas.
+          </div>
+        )}
         {/* Progress Bar */}
-        <div className="progress-bar">
+        <div className="progress-bar mt-3">
           <div 
             className="progress-fill" 
             style={{ width: `${((currentQuestionIndex + 1) / quiz.questions.length) * 100}%` }}

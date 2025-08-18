@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { userAPI, quizAPI, assignmentAPI } from '../../services/api';
+import { userAPI, quizAPI, assignmentAPI, reportsAPI } from '../../services/api';
 import DashboardLayout from '../../layout/DashboardLayout';
 
 /**
@@ -345,6 +345,18 @@ function PerformanceReportsPage() {
                 </div>
               </button>
             ))}
+            {children.length > 0 && (
+              <button
+                onClick={() => {
+                  const childId = selectedChild?.id || children[0].id;
+                  reportsAPI.downloadStudentReport(childId, `${(selectedChild?.profile?.firstName || children[0].profile?.firstName || 'child')}-report.pdf`)
+                    .catch(() => alert('Failed to download report'));
+                }}
+                className="ml-auto px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700"
+              >
+                📄 Download PDF Report
+              </button>
+            )}
           </div>
         </div>
 
