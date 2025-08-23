@@ -14,7 +14,37 @@ const QnAPage = () => {
   // Get student's level (mock - in real app this would come from user profile)
   const studentLevel = user.profile.grade || 1;
   console.log(user, "auth.......");
-  // console.log(user, "user auuut");  
+
+  // Process messages to ensure proper sender identification for replies
+  const processMessages = (messages) => {
+    console.log('🔄 Processing messages for reply sender identification...');
+    return messages.map(message => {
+      // Process replies to ensure they have proper sender information
+      const processedReplies = message.replies.map(reply => {
+        // If reply has no studentId but has a replyToId, it's likely from the current user
+        if (!reply.studentId && !reply.teacherId && reply.replyToId) {
+          console.log('🔧 Fixing reply sender info:', {
+            replyId: reply.id,
+            originalReply: reply,
+            inferredStudentId: user.id,
+            inferredStudentName: user.name || 'Student'
+          });
+          return {
+            ...reply,
+            studentId: user.id,
+            studentName: user.name || 'Student',
+            studentAvatar: '👨‍🎓'
+          };
+        }
+        return reply;
+      });
+
+      return {
+        ...message,
+        replies: processedReplies
+      };
+    });
+  };
 
   // Load messages from API
   useEffect(() => {
@@ -26,75 +56,11 @@ const QnAPage = () => {
         // TODO: Replace with real API call
         const response = await qnaAPI.getLevelMessages(studentLevel);
         console.log(response.data.data.messages, "response.data.data.messages");
-        setMessages(response.data.data.messages);
         
-        // // For now, use mock data that matches API format
-        // const mockResponse = {
-        //   success: true,
-        //   data: {
-        //     messages: [
-        //       {
-        //         id: 'msg_1',
-        //         studentId: 'student_001',
-        //         studentName: 'Alice Johnson',
-        //         studentAvatar: '👩‍🎓',
-        //         teacherId: null,
-        //         teacherName: null,
-        //         teacherAvatar: null,
-        //         content: 'I need help with basic addition. Can someone explain how to add numbers?',
-        //         timestamp: '2024-12-09T10:30:00Z',
-        //         isTeacher: false,
-        //         level: 1,
-        //         replyToId: null,
-        //         threadId: 'msg_1',
-        //         replies: [
-        //           {
-        //             id: 'reply_1',
-        //             teacherId: 'teacher_001',
-        //             teacherName: 'Mr. Smith',
-        //             teacherAvatar: '👨‍🏫',
-        //             content: 'Great question! Addition is when we combine numbers. For example, 2 + 3 = 5. Start with the first number and count up by the second number.',
-        //             timestamp: '2024-12-09T11:15:00Z',
-        //             isTeacher: true,
-        //             replyToId: 'msg_1',
-        //             threadId: 'msg_1'
-        //           },
-        //           {
-        //             id: 'reply_2',
-        //             studentId: 'student_002',
-        //             studentName: 'Bob Wilson',
-        //             studentAvatar: '👨‍🎓',
-        //             content: 'I also had trouble with this! I found that using blocks helps me visualize it.',
-        //             timestamp: '2024-12-09T11:30:00Z',
-        //             isTeacher: false,
-        //             replyToId: 'msg_1',
-        //             threadId: 'msg_1'
-        //           }
-        //         ]
-        //       },
-        //       {
-        //         id: 'msg_2',
-        //         teacherId: 'teacher_001',
-        //         teacherName: 'Mr. Smith',
-        //         teacherAvatar: '👨‍🏫',
-        //         studentId: null,
-        //         studentName: null,
-        //         studentAvatar: null,
-        //         content: '📢 Reminder: Math quiz tomorrow! Make sure to practice your addition facts.',
-        //         timestamp: '2024-12-09T14:00:00Z',
-        //         isTeacher: true,
-        //         level: 1,
-        //         replyToId: null,
-        //         threadId: 'msg_2',
-        //         replies: []
-        //       }
-        //     ]
-        //   }
-        // };
-
-        // setMessages(mockResponse.data.messages);
+        // Process messages to fix reply sender information
+        const processedMessages = processMessages(response.data.data.messages);
+        setMessages(processedMessages);
         
-        // console.log('✅ Messages loaded:', mockResponse.data.messages);
       } catch (error) {
         console.error('❌ Error loading messages:', error);
         alert('Failed to load messages. Please try again.');
@@ -127,8 +93,17 @@ const QnAPage = () => {
 
   // Helper function to determine message styling based on sender
   const getMessageStyle = (message) => {
-    // Check if it's a teacher message (teacherId is not null)
-    if (message.teacherId) {
+    // Check if it's a general message from teacher (special styling)
+    if (message.teacherId && message.isGeneralMessage) {
+      return {
+        container: 'bg-purple-50 border-purple-300 shadow-lg',
+        text: 'text-purple-900',
+        name: 'text-purple-800 font-bold',
+        timestamp: 'text-purple-600',
+        avatar: 'bg-purple-200'
+      };
+    } else if (message.teacherId) {
+      // Regular teacher message
       return {
         container: 'bg-green-50 border-green-200',
         text: 'text-green-900',
@@ -136,8 +111,9 @@ const QnAPage = () => {
         timestamp: 'text-green-600',
         avatar: 'bg-green-100'
       };
-    } else if (message.studentId === user.id) {
-      // Current user's (student) message
+    } else if (message.studentId === user.id || 
+               (!message.studentId && !message.teacherId && message.replyToId)) {
+      // Current user's (student) message or reply without sender info (infer as current user)
       return {
         container: 'bg-blue-100 border-blue-300 shadow-md',
         text: 'text-blue-900',
@@ -170,12 +146,8 @@ const QnAPage = () => {
         replyToId: replyTo?.id || null
       };
 
-      // console.log('📤 Sending Q&A message:', messageData);
-
       // TODO: Replace with real API call
       const response = await qnaAPI.sendStudentMessage(messageData);
-      // const newMessageObj = response.data.message;
-      // console.log(response.data, "response.data sendStudentMessage");
       
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -228,16 +200,28 @@ const QnAPage = () => {
         userId: user.id
       };
 
-      // console.log('🗑️ Deleting message:', messageId, deleteData);
-
       // TODO: Replace with real API call
       await qnaAPI.deleteMessage(messageId, deleteData);
       
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Remove message from state
-      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      // Remove message from state - handle both top-level messages and replies
+      setMessages(prev => {
+        // First, try to find and remove from top-level messages
+        const filteredMessages = prev.filter(msg => msg.id !== messageId);
+        
+        // If message wasn't found in top-level, it might be a reply
+        if (filteredMessages.length === prev.length) {
+          // Search through replies in each message
+          return prev.map(message => ({
+            ...message,
+            replies: message.replies.filter(reply => reply.id !== messageId)
+          }));
+        }
+        
+        return filteredMessages;
+      });
     } catch (error) {
       console.error('Error deleting message:', error);
       alert('Failed to delete message. Please try again.');
@@ -326,7 +310,12 @@ const QnAPage = () => {
                         <span className={`text-xs ${messageStyle.timestamp}`}>
                           {formatTimestamp(message.timestamp)}
                         </span>
-                        {message.teacherId && (
+                        {message.teacherId && message.isGeneralMessage && (
+                          <span className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded font-semibold">
+                            📢 General
+                          </span>
+                        )}
+                        {message.teacherId && !message.isGeneralMessage && (
                           <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">
                             Teacher
                           </span>
@@ -372,29 +361,36 @@ const QnAPage = () => {
                           <div className="flex items-center space-x-2">
                             <span className={`font-semibold text-sm ${replyStyle.name}`}>
                               {reply.teacherId ? reply.teacherName : reply.studentName}
-                              {reply.studentId === user.id && !reply.teacherId && (
+                              {(reply.studentId === user.id && !reply.teacherId) || 
+                               (!reply.studentId && !reply.teacherId && reply.replyToId) ? (
                                 <span className="ml-1 text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">
                                   You
                                 </span>
-                              )}
+                              ) : null}
                             </span>
                             <span className={`text-xs ${replyStyle.timestamp}`}>
                               {formatTimestamp(reply.timestamp)}
                             </span>
-                            {reply.teacherId && (
+                            {reply.teacherId && reply.isGeneralMessage && (
+                              <span className="text-xs bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded font-semibold">
+                                📢 General
+                              </span>
+                            )}
+                            {reply.teacherId && !reply.isGeneralMessage && (
                               <span className="text-xs bg-green-200 text-green-800 px-1.5 py-0.5 rounded">
                                 Teacher
                               </span>
                             )}
                           </div>
-                          {!reply.teacherId && reply.studentId === user.id && (
+                          {(!reply.teacherId && reply.studentId === user.id) || 
+                           (!reply.studentId && !reply.teacherId && reply.replyToId) ? (
                             <button
                               onClick={() => handleDeleteMessage(reply.id)}
                               className="text-red-400 hover:text-red-600 text-xs"
                             >
                               Delete
                             </button>
-                          )}
+                          ) : null}
                         </div>
                         <p className={replyStyle.text}>
                           {reply.content}
@@ -442,7 +438,7 @@ const QnAPage = () => {
               onKeyPress={handleKeyPress}
               placeholder={
                 replyTo 
-                  ? `Reply to ${replyTo.isTeacher ? replyTo.teacherName : replyTo.studentName}...` 
+                  ? `Reply to ${replyTo.teacherId ? replyTo.teacherName : replyTo.studentName}...` 
                   : "Type your question or message here..."
               }
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
