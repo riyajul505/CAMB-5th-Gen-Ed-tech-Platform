@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: '/api', // Use proxy path instead of full URL
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api', // Use env var or fallback to proxy
   timeout: 10000,
   headers: {
     // Don't set default Content-Type - let each request decide
