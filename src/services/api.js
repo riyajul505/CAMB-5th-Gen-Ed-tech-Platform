@@ -580,7 +580,7 @@ export const teacherAPI = {
     return api.get(`/teacher/resources/level/${level}`);
   }
 };
-
+//NAIMUR START
 // Quiz API with Gemini integration
 export const quizAPI = {
   // Get low-score (<30%) attempts for a resource by id or title
@@ -915,7 +915,7 @@ Respond in a warm, supportive tone as if you're a helpful teacher.`;
       };
     }
   },
-
+//NAIMUREND
   saveAchievement: async (achievementData, options = { convertToBase64: true }) => {
     // Validate input
     if (!achievementData.studentId || !achievementData.title || !achievementData.level) {
